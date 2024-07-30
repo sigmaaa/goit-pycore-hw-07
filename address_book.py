@@ -78,11 +78,18 @@ class Phone(Field):
         if not phone_number.isdigit() or len(phone_number) != 10:
             raise ValueError("Phone number must contain exactly 10 digits")
 
+    def __format__(self, format_spec: str) -> str:
+        return self.value.__format__(format_spec)
+
+    def __str__(self):
+        return self.value
+
 
 class Birthday(Field):
     """
     Represents a birthday in DD.MM.YYYY format. Contains validation
     """
+
     def __init__(self, value):
         """
         validates format and check if ensures that birthday is a date format
@@ -171,7 +178,11 @@ class Record:
         Returns:
             str: The found phone number or None if not found.
         """
-        return next((phone.value for phone in self.phones if phone.value == phone_number), None)
+        search_result = next(
+            (phone.value for phone in self.phones if phone.value == phone_number), None)
+        if search_result is None:
+            raise KeyError
+        return search_result
 
     def __str__(self):
         return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)}"
@@ -206,7 +217,7 @@ class AddressBook(UserDict):
         Returns:
             Record: The found record or None if not found.
         """
-        return self.data.get(name)
+        return self.data[name]
 
     def delete(self, name):
         """
@@ -243,3 +254,199 @@ class AddressBook(UserDict):
                 })
 
         return upcoming_birthdays
+
+
+def parse_input(user_input):
+    """
+    Parse user input into command and arguments.
+
+    Parameters:
+    user_input (str): The input string from the user.
+
+    Returns:
+    tuple: A tuple containing the command and a list of arguments.
+    """
+    cmd, *args = user_input.split()
+    cmd = cmd.strip().lower()
+    return cmd, *args
+
+
+def input_error(func):
+    """
+    Decorator for handling input error
+    """
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ValueError:
+            return "Error: Command requires exactly 2 arguments (name and phone/birthday)."
+        except KeyError:
+            return "Error: No contact with this name was found in the dictation"
+        except IndexError:
+            return "Error: Command requires 1 argument (name)"
+    return inner
+
+
+@input_error
+def add_contact(args, contacts):
+    """
+    Add a new contact to the contacts dictionary.
+
+    Parameters:
+    args (list): A list of arguments containing the name and phone number.
+    contacts (dict): The contacts dictionary.
+
+    Returns:
+    str: A message indicating the result of the operation.
+    """
+    name, phone, *_ = args
+    record = contacts.find(name)
+    message = "Contact updated."
+    if record is None:
+        record = Record(name)
+        contacts.add_record(record)
+        message = "Contact added."
+    if phone and record.find_phone(phone) is None:
+        record.add_phone(phone)
+    return message
+
+
+@input_error
+def get_number(args, contacts):
+    """
+    Returns a contact's phone from the dictionary.
+
+    Parameters:
+    args (list): A list of arguments containing the name.
+    contacts (dict): The contacts dictionary.
+
+    Returns:
+    str: A message indicating the result of the operation.
+    """
+    name = args[0]
+    return contacts.find(name)
+
+
+@input_error
+def change_contact(args, contacts):
+    """
+    Change the phone number for an existing contact.
+
+    Parameters:
+    args (list): A list of arguments containing the name and new phone number.
+    contacts (dict): The contacts dictionary.
+
+    Returns:
+    str: A message indicating the result of the operation.
+    """
+    name, old_phone, new_phone = args
+    contacts.find(name).edit_phone(old_phone, new_phone)
+    return "Contact updated"
+
+
+@input_error
+def show_all(contacts):
+    """
+    Show all contacts in the contacts dictionary.
+
+    Parameters:
+    contacts (dict): The contacts dictionary.
+
+    Returns:
+    str: A formatted string of all contacts.
+    """
+    if not contacts:
+        return "No contacts found."
+    result = "\n" + "-" * 30 + "\n"
+    result += f"{'Name':<15} {'Phone Number':<15}\n"
+    result += "\n" + "-" * 30 + "\n"
+    for name, record in contacts.items():
+        for phone in record.phones:
+            result += f"{name:<15} {phone:<15}\n"
+            result += "\n"
+    return result
+
+
+@input_error
+def add_birthday(args, contacts):
+    """
+    Adds a birthday to a contact in the AddressBook.
+
+    Args:
+        args (tuple): A tuple containing the name of the contact (str) and the birthday (str).
+        contacts (AddressBook): The AddressBook object that contains the list of contacts.
+
+    Returns:
+        str: A message indicating that the birthday has been added for the specified contact.
+    """
+    name, birthday = args
+    contacts.find(name).add_birthday(birthday)
+    return f"Birthday has been added for {name}"
+
+
+@input_error
+def show_birthday(args, contacts):
+    """
+    Retrieves the birthday of a specific contact.
+
+    Args:
+        args (tuple): A tuple containing the name of the contact (str).
+        contacts (AddressBook): The AddressBook object that contains the list of contacts.
+
+    Returns:
+        str: The birthday of the specified contact.
+    """
+    name = args[0]
+    return contacts.find(name).birthday
+
+
+@input_error
+def birthdays(contacts):
+    """
+    Retrieves a list of upcoming birthdays from the AddressBook.
+
+    Args:
+        contacts (AddressBook): The AddressBook object that contains the list of contacts.
+
+    Returns:
+        list: A list of upcoming birthdays.
+    """
+    return contacts.get_upcoming_birthdays()
+
+
+def main():
+    """
+    Main function to run the assistant bot.
+    """
+    contacts = AddressBook()
+    print("Welcome to the assistant bot!")
+    while True:
+        user_input = input("Enter a command: ")
+        command, *args = parse_input(user_input)
+
+        if command in ["close", "exit"]:
+            print("Good bye!")
+            break
+
+        if command == "hello":
+            print("How can I help you?")
+        elif command == "add":
+            print(add_contact(args, contacts))
+        elif command == "phone":
+            print(get_number(args, contacts))
+        elif command == "change":
+            print(change_contact(args, contacts))
+        elif command == "all":
+            print(show_all(contacts))
+        elif command == "add-birthday":
+            print(add_birthday(args, contacts))
+        elif command == "show-birthday":
+            print(show_birthday(args, contacts))
+        elif command == "birthdays":
+            print(birthdays(contacts))
+        else:
+            print("Invalid command.")
+
+
+if __name__ == "__main__":
+    main()
