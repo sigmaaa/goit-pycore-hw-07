@@ -81,9 +81,6 @@ class Phone(Field):
     def __format__(self, format_spec: str) -> str:
         return self.value.__format__(format_spec)
 
-    def __str__(self):
-        return self.value
-
 
 class Birthday(Field):
     """
@@ -135,7 +132,7 @@ class Record:
         """
         Getter for Birthday object
         """
-        return self.__birthday.value
+        return self.__birthday.value if self.__birthday is not None else None
 
     def add_phone(self, phone_number):
         """
@@ -178,11 +175,7 @@ class Record:
         Returns:
             str: The found phone number or None if not found.
         """
-        search_result = next(
-            (phone.value for phone in self.phones if phone.value == phone_number), None)
-        if search_result is None:
-            raise KeyError
-        return search_result
+        return next((phone.value for phone in self.phones if phone.value == phone_number), None)
 
     def __str__(self):
         return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)}"
@@ -217,7 +210,7 @@ class AddressBook(UserDict):
         Returns:
             Record: The found record or None if not found.
         """
-        return self.data[name]
+        return self.data.get(name)
 
     def delete(self, name):
         """
@@ -239,9 +232,11 @@ class AddressBook(UserDict):
         current_date = datetime.today().date()
 
         for user in self.data.keys():
-            user_birthday = self.data[user].birthday.replace(
+            user_birthday = self.data[user].birthday
+            if user_birthday is None:
+                continue
+            user_birthday = user_birthday.replace(
                 year=current_date.year)
-
             # Check if the birthday is within the next 7 days and not in the past
             if current_date < user_birthday <= current_date + timedelta(days=7):
                 # Adjust on Monday if birthday falls on a weekend (Saturday or Sunday)
@@ -324,7 +319,7 @@ def get_number(args, contacts):
     str: A message indicating the result of the operation.
     """
     name = args[0]
-    return contacts.find(name)
+    return contacts[name]
 
 
 @input_error
@@ -340,7 +335,7 @@ def change_contact(args, contacts):
     str: A message indicating the result of the operation.
     """
     name, old_phone, new_phone = args
-    contacts.find(name).edit_phone(old_phone, new_phone)
+    contacts[name].edit_phone(old_phone, new_phone)
     return "Contact updated"
 
 
@@ -380,7 +375,7 @@ def add_birthday(args, contacts):
         str: A message indicating that the birthday has been added for the specified contact.
     """
     name, birthday = args
-    contacts.find(name).add_birthday(birthday)
+    contacts[name].add_birthday(birthday)
     return f"Birthday has been added for {name}"
 
 
@@ -397,7 +392,7 @@ def show_birthday(args, contacts):
         str: The birthday of the specified contact.
     """
     name = args[0]
-    return contacts.find(name).birthday
+    return contacts[name].birthday
 
 
 @input_error
